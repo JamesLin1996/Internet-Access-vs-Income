@@ -1,0 +1,1863 @@
+---
+title: "Analyzing Internet Access, Population, Income, and Facebook Data Over Time"
+author: "James Lin"
+resource_files:
+- .Renviron
+output:
+  html_notebook:
+    code_folding: hide
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+runtime: shiny
+---
+
+# **Introduction**
+The purpose of this project is to demonstrate knowledge of the complete data science pipeline and use techniques learned in class to extract interesting insights from a particular data set. 
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(data.world)
+require(data.world)
+library(shiny)
+library(treemapify)
+library(tibble)
+require(DT)
+library(choroplethr)
+library(choroplethrMaps)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **R Session Info**  
+
+```{r}
+sessionInfo()
+```
+
+# **Setup**
+
+For first time users, before running any chunks in this notebook:
+
+* Install the `data.world` R package:
+  ```
+  devtools::install_github("datadotworld/data.world-r", build_vignettes = TRUE, force = TRUE)
+  ```
+* Get your API authentication token at https://data.world/settings/advanced
+* Configure the `data.world` package:
+  ```
+  data.world::set_config(data.world::save_config(auth_token = "YOUR TOKEN"))
+  ```
+
+Configuration will be saved at `~/.dw/config` and automatically applied to all future R sessions.
+
+# **Connecting to data.world**
+
+Description of our dataset: seven different tables containing census population, income, internet usage, and facebook usage information.
+
+```{r}
+project <- "https://data.world/apk585/f-17-edv-project-5"
+data.world::set_config(cfg_env("DW_API"))
+
+```
+# **Tableau Workbook Links**
+
+Tableau Workbooks Utilized: 
+https://public.tableau.com/profile/james.lin7987#!/vizhome/Project5Tableau-JamesLin/Barchart1?publish=yes
+
+# **Inputting and Cleaning the CSVs**
+For this project, we decided to use data from 7 different data sets. The data sets contained the following information:
+  1) 2007 Internet Usage Data
+  2) 2012 Internet Usage Data
+  3) 2007 Population by Age Group
+  4) 2012 Population by Age Group
+  5) 2007 Mean Income by State
+  6) 2012 Mean Income by State
+  7) Facebook Usage Data (approx. 2010)
+  
+We decided to read these CSVs one by one and check whether or not R would interpret the column types correctly. We found that R read in all the column types correctly for all of the data sets except for three data sets: 2012MeanIncomeData, 2007MeanIncomeData, and FacebookData. The mean income data sets contained dollar signs and thus, R was interpreting these columns as characters. On the other hand, Facebook's data set contained percentages, which also caused R to interpet these columns as characters. This is shown in the screenshots below.
+
+
+![](https://i.imgur.com/24V9j3k.png)
+![](https://i.imgur.com/47TnQaG.png)
+
+![](https://i.imgur.com/9j8grJL.png)
+![](https://i.imgur.com/FEslpWu.png)
+
+This was the result of using read_csv without specifying the correct column types for the mean income data sets. As can be seen, R interpreted average household income as a character due to the dollar signs contained in the data set.
+
+![](https://i.imgur.com/Ujojwop.png)
+
+This was the result of using read_csv without specifying the correct column types for the facebook data set. As can be seen, R incorrectly interpreted Facebook Penetration, Internet Penetration, and Population Percent of USA as character columns.
+
+![](https://i.imgur.com/2o57aKC.png)
+
+The rest of the columns in the other 5 data sets however were parsed correctly as shown in the screen shot above.
+
+
+In order to fix the problem we ran into for our other 3 data sets, we manually specified the column types as col_number() as shown in the screenshot of the code below. The data sets have now all been cleaned for column types.
+
+![](https://i.imgur.com/17JEc8L.png)
+
+
+
+```{r}
+
+#Reading in 2007 Population Data
+population_2007 = read_csv("https://query.data.world/s/cs8UvoCfOkrsRgai-RcIxetDUqqB9I")
+
+#Reading in 2012 Population Data
+population_2012 = read_csv("https://query.data.world/s/vWJPD4vzTQZJ7qIuiMjpVv1X0S0AIq")
+
+#Reading in 2007 Internet Access Data
+internet_2007 = read_csv("https://query.data.world/s/R1cOwoBCBa4cHWmeeoh2Yv6z3gZ37P")
+
+#Reading in 2012 Internet Access Data
+internet_2012 = read_csv("https://query.data.world/s/q2aRRYI2nb6Jfj5ZF7b6c63T4Mcacz")
+
+#Reading in 2007 Mean Income Data - incorrect column parsing by R
+    ## read_csv("https://query.data.world/s/4mBQTz24e8loSWoUV2-oiCJqHACRW4")
+
+
+    # Corrected column parsing
+      income_2007 = read_csv("https://query.data.world/s/4mBQTz24e8loSWoUV2-oiCJqHACRW4",
+            col_types = list(
+            Region = col_character(),
+            `Average Household Income` = col_number()
+      )
+      )
+
+#Reading in 2012 Mean Income Data - incorrect column parsing by R
+    ## read_csv("https://query.data.world/s/K8OGlDya4vzEjXskjvnKLcxS2oDj5A")
+      
+    
+    # Corrected column parsing
+      income_2012 = read_csv("https://query.data.world/s/K8OGlDya4vzEjXskjvnKLcxS2oDj5A",
+            col_types = list(
+            Region = col_character(),
+            `Average Household Income` = col_number()
+      )
+      )
+
+      
+#Reading in the Facebook CSV
+    ## facebook = read_csv("https://query.data.world/s/VLKCo8NjunpzXyMOXNwFHEBOATtBvz")
+      
+    # Corrected column parsing
+      facebook = read_csv("https://query.data.world/s/VLKCo8NjunpzXyMOXNwFHEBOATtBvz",
+            col_types = list(
+            Region = col_character(),
+            `Population Percent of USA` = col_number(),
+            `Internet Penetration` = col_number(),
+            `Faceook Users` = col_number(),
+            `Facebook Penetration` = col_number()
+)
+)
+
+
+```
+
+We then used a regular expression in order to rid our datasets of any non printable characters. The code used for this is shown in the screenshot below.
+
+![](https://i.imgur.com/VlElCOP.png)
+
+
+```{r}
+
+for (n in names(facebook)) {
+	facebook[n] <- data.frame(lapply(facebook[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(population_2007)) {
+	population_2007[n] <- data.frame(lapply(population_2007[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(population_2012)) {
+	population_2012[n] <- data.frame(lapply(population_2012[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(internet_2007)) {
+	internet_2007[n] <- data.frame(lapply(internet_2007[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(internet_2012)) {
+	internet_2012[n] <- data.frame(lapply(internet_2012[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(income_2007)) {
+	income_2007[n] <- data.frame(lapply(income_2007[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+for (n in names(income_2012)) {
+	income_2012[n] <- data.frame(lapply(income_2012[n], gsub, pattern="[^ -~]",replacement=""))
+}
+
+
+```
+
+
+# **Exporting the CSVs and Loading into data.world**
+
+The next step in the data science pipeline was to export the CSVs and upload them to data.world. The following displays code utilizied to do that. We are now ready to build our data model.
+
+```{r}
+## Used to export the cleaned CSVs
+
+
+#write_csv(facebook, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/Facebook_Cleaned.csv")
+
+#write_csv(population_2007, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2007Population_Cleaned.csv")
+
+#write_csv(population_2012, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2012Population_Cleaned.csv")
+
+#write_csv(internet_2007, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2007Internet_Cleaned.csv")
+
+#write_csv(internet_2012, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2012Internet_Cleaned.csv")
+
+#write_csv(income_2007, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2007Income_Cleaned.csv")
+
+#write_csv(income_2012, "C:/Users/James Lin/Documents/PDF,DOC,PPT/2017 Fall/CS 329E/Project #5/2012Income_Cleaned.csv")
+
+```
+
+# **Building the Data Model**
+
+Now that we have cleaned, exported, and uploaded our data onto data.world, we are ready to build our data model. The following screenshot reflects the relationships of our final set of data.
+
+![](https://i.imgur.com/TWNbJeZ.png)
+
+**   **
+# **Interesting Findings**
+
+**   **
+## **Relationship Between Millennial Population and Internet Access**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from four different data sources: 2007 internet access, 2012 internet access, 2007 population, and 2012 population. The code for this is shown in the screenshot below.
+
+![](https://i.imgur.com/YO5nEGr.png)
+
+```{r}
+
+df_1 <- data.world::query(data.world::qry_sql
+("SELECT `2007Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS 2007IAHome, `2007Internet_Cleaned`.region as State, `2007population_cleaned`.total_estimate_total_population_age_15_to_19_years as 2007_15_19Population
+FROM 2007Internet_Cleaned 
+JOIN 2007Population_cleaned ON `2007Internet_Cleaned`.region  = `2007Population_cleaned`.region"), dataset=project)
+
+
+df_2 <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS 2012IAHome, `2012Internet_Cleaned`.region as State, `2012population_cleaned`.total_estimate_age_15_to_19_years as 2012_15_19Population
+FROM 2012Internet_Cleaned 
+JOIN 2012Population_cleaned ON `2012Internet_Cleaned`.region  = `2012Population_cleaned`.region"), dataset=project)
+
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+As can be seen in the four graphs below, it seems that the percentage of the millennial population with respect to a state is highly correlated with the percentage of individuals who access the internet from home by state in 2007. However, this relationship does not seem to hold as strongly in 2012. In 2007, it is clear that there is discernible relationship as many states that are above the table average for one graph are above the table average for the second graph. For 2012, this does not necessarily seem to be the case.
+
+There could be numerous explanations for this. I believe one possible explanation is as public facilities such as schools started to adapt high speed internet and use it, less and less millennials would access it from home and more and more would start to access it from public facilities. However, this relationship may not hold true going past 2012 as internet as well as devices used to access the internet become more widespread and cheaper.
+
+```{r}
+
+Means2007 <- df_1 %>% dplyr::summarize(Population_15to19_2007Mean = mean(`2007_15_19Population`), InternetAcess_AtHome_2007Mean = mean(`2007IAHome`))
+renderDataTable({
+  DT::datatable(Means2007, rownames = FALSE,
+                extensions = list(Responsive = TRUE, FixedHeader = TRUE)
+  )
+})
+
+inputPanel(
+  selectInput("selectRegiondf_1", label = "Select Region",
+              choices = df_1$State, multiple=TRUE, selected=df_1$State)
+)
+
+renderPlot({df_1 %>% dplyr::select(State,`2007_15_19Population`) %>% dplyr::filter(State == input$selectRegiondf_1) %>% ggplot() + geom_bar(mapping = aes(x=State, y= `2007_15_19Population`), stat="identity") + geom_hline(yintercept=7.26153846153846, color = "blue") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Millennial Population by State (2007)", x="State", y="Population Percentage")})
+
+renderPlot({df_1 %>% dplyr::select(State,`2007IAHome`) %>% dplyr::filter(State == input$selectRegiondf_1) %>% ggplot() + geom_bar(mapping = aes(x=State, y= `2007IAHome`), stat="identity") + geom_hline(yintercept=67.4134615384615, color = "blue") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Average Income by State (2007)", x="State", y="Average Income")})
+
+
+
+
+Means2012 <- df_2 %>% dplyr::summarize(Population_15to19_2012Mean= mean(`2012_15_19Population`), InternetAcess_AtHome_2012Mean = mean(`2012IAHome`))
+renderDataTable({
+  DT::datatable(Means2012, rownames = FALSE,
+                extensions = list(Responsive = TRUE, FixedHeader = TRUE)
+  )
+})
+
+inputPanel(
+  selectInput("selectRegiondf_2", label = "Select Region",
+              choices = df_2$State, multiple=TRUE, selected=df_2$State)
+)
+
+renderPlot({df_2 %>% dplyr::select(State,`2012_15_19Population`) %>% dplyr::filter(State == input$selectRegiondf_2) %>% ggplot() + geom_bar(mapping = aes(x=State, y= `2012_15_19Population`), stat="identity") + geom_hline(yintercept = 6.82307692307692, color = "blue")+ theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "Millennial Population by State (2012)", x="State", y="Population Percentage")})
+
+
+renderPlot({df_2 %>% dplyr::select(State,`2012IAHome`) %>% dplyr::filter(State == input$selectRegiondf_2) %>% ggplot() + geom_bar(mapping = aes(x=State, y= `2012IAHome`), stat="identity") + geom_hline(yintercept = 69.9923076923077, color = "blue") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Average Income by State (2012)", x="State", y="Average Income")})
+
+
+```
+
+**   **
+## **Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012**
+
+
+**Inputting the CSV into R**
+
+For this insight, I decided to create two data frames containing 2007 and 2012 information on internet access outside the home as well as income. The code for this is shown in the screenshot below. Both data frames will require tidying which will be done through gathering in the step following this.
+
+![](https://i.imgur.com/Rlz619y.png)
+
+```{r}
+df_3 <- data.world::query(data.world::qry_sql
+("SELECT `2007internet_cleaned`.percent_of_individuals_who_access_internet_outside_of_household as 2007, `2007internet_cleaned`.region as States,
+`2012internet_cleaned`.percent_of_individuals_who_access_internet_outside_of_household as 2012
+FROM `2007internet_cleaned`
+JOIN `2012internet_cleaned` 
+ON `2007internet_cleaned`.region = `2012internet_cleaned`.region"), dataset=project)
+
+
+df_4 <- data.world::query(data.world::qry_sql
+("SELECT `2007income_cleaned`.average_household_income as `2007`, `2012income_cleaned`.average_household_income as `2012`, `2007income_cleaned`.region as States
+FROM 2007income_cleaned JOIN 2012income_cleaned ON `2007income_cleaned`.region = `2012income_cleaned`.region"), dataset=project)
+
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. The code for this is shown below.
+
+![](https://i.imgur.com/22swXMC.png)
+
+```{r}
+
+df_3 <- df_3 %>%tidyr::gather("Year", "Percentage",	-2)
+df_4 <- df_4 %>%tidyr::gather("Year", "Income",	-3)
+
+
+```
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+For this insight, I decided to use data from 4 tables: 2007Income, 2012Income, 2007InternetUsage, 2012InternetUsage.
+
+Initially, I was curious to see what the change in internet access outside of the household would be from 2007 to 2012 for different states. Therefore, I decided to create two maps to show this change: one for 2007 and the other for 2012. The maps are shown below. As can be seen, in creating the maps, I used a regular expression to filter out information unique to 2007 and 2012.
+
+![The above regular expression filters out all rows that start with any character, but end with 12](https://i.imgur.com/6yjRhn0.png)
+
+![The above regular expression filters out all rows that start with any character, but end with 07](https://i.imgur.com/zCbT018.png)
+
+
+```{r}
+df_2007 <- df_3 %>% dplyr::filter(!grepl(".*12$", Year)) %>% dplyr::select(States, Percentage)
+
+names(df_2007) <- c("region", "value")
+df_2007$region <- tolower(df_2007$region)
+df_2007$region <- gsub(" (u.s. state)", "", df_2007$region, fixed=TRUE)
+renderPlot({state_choropleth(df_2007) + labs(title = "Internet Usage Outside Household (2007)")})
+
+
+df_2013 <- df_3 %>% dplyr::filter(!grepl(".*07$", Year)) %>% dplyr::select(States, Percentage)
+
+names(df_2013) <- c("region", "value")
+df_2013$region <- tolower(df_2013$region)
+df_2013$region <- gsub(" (u.s. state)", "", df_2013$region, fixed=TRUE)
+renderPlot({state_choropleth(df_2013) + labs(title = "Internet Usage Outside Household (2012)")})
+
+```
+
+As can be seen, it seems that most of the states had relatively the same amount of internet usage from 2007 to 2012 outside the household. However, a few states struck me as having a significant positive change. These states include Idaho and Florida.
+
+I decided to take a look into this further to see if there was any relationship with change in average income from 2007 to 2012. The next plot shows that although most states experienced a change in their average income, relative to one another, they stayed relatively the same.
+
+```{r}
+
+df_2007Income <- df_4 %>% dplyr::filter(!grepl(".*12$", Year)) %>% dplyr::select(States, Income)
+df_2007Income<- df_2007Income %>% dplyr::arrange(Income) 
+df_2007Income$States <- factor(df_2007Income$States, levels=df_2007Income$States)
+
+renderPlot({df_2007Income %>%ggplot(mapping=aes(x=States, y=Income)) + geom_bar(stat="identity") +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "Average Income by State (2007 Arranged)", x="State", y="Average Income")})
+
+
+
+df_2012Income <- df_4 %>% dplyr::filter(!grepl(".*07$", Year)) %>% dplyr::select(States, Income)
+df_2012Income<- df_2012Income %>% dplyr::arrange(Income) 
+df_2012Income$States <- factor(df_2012Income$States, levels=df_2012Income$States)
+
+renderPlot({df_2012Income %>%ggplot(mapping=aes(x=States, y=Income)) + geom_bar(stat="identity") +theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "Average Income by State (2012 Arranged)", x="State", y="Average Income")})
+
+```
+
+However, interestingly enough, some states actually had a decrease in their average household income from 2007 to 2012. These states were certainly the minority, and in order to display this relationship more thoroughly, I created a cross tab using a calculated field as well as a parameter. The calculated field was the percentage income difference from 2007 to 2012. The parameter I created accentuated whether or not their was a negative difference in income, a high difference in income, or a medium difference in income. A screenshot of that calculation is shown below.
+
+![](https://i.imgur.com/323NoDi.png)
+
+From my cross tab, I saw that states that had a negative change in their income were ones that had the most increase in internet usage outside the household. These were states such as Idaho and Florida which clearly have a significant positive change in their internet usage outside the household according to first two maps.
+
+My explanation for this is that most likely, states that had a decrease in their average income had less people who could afford to have internet in the house. Thus, they went elsewhere to access the internet. A screenshot of my cross tab is shown below.
+
+
+```{r}
+inputPanel(
+  selectInput("selectRegiondf_4", label = "Select Region",
+              choices = df_4$States, multiple=TRUE, selected= df_4$States)
+)
+
+df_4a <- eventReactive(c(input$selectRegiondf_4), { 
+  project <- "https://data.world/apk585/f-17-edv-project-5" 
+  data.world::set_config(cfg_env("DW_API")) 
+  paramQuery <- data.world::qry_sql(
+  
+ "with q1 as (SELECT ((`2012income_cleaned`.average_household_income - `2007income_cleaned`.average_household_income)/ `2007income_cleaned`.average_household_income) as PercentIncomeDifference, `2007income_cleaned`.region as States
+FROM 2007income_cleaned
+JOIN 2012income_cleaned ON `2007income_cleaned`.region = `2012income_cleaned`.region)
+
+SELECT q1.PercentIncomeDifference, q1.States,
+CASE
+WHEN q1.PercentIncomeDifference > 0.05 THEN 'HighAppreciation'
+WHEN q1.PercentIncomeDifference < 0.00 THEN 'NegativeChange'
+ELSE 'MediumAppreciation'
+END AS IncomeParameter
+FROM q1
+
+   ")
+ paramQuery$params <- c(input$selectRegiondf_4)
+ data.world::query(paramQuery, dataset = project)
+}) 
+
+renderPlot({df_4a() %>% dplyr::filter(States == input$selectRegiondf_4) %>% ggplot() + 
+  geom_text(aes(x=IncomeParameter, y=States, label=PercentIncomeDifference), size=6) +
+  geom_tile(aes(x=IncomeParameter, y=States, fill=IncomeParameter), alpha=0.50) +
+    theme(legend.text=element_text(size=20)) +
+    theme(axis.text=element_text(size=20),
+    axis.title=element_text(size=20, face="bold"))  + 
+    theme(plot.title = element_text(size = 30, face = "bold")) +
+    ggtitle(paste("Percent Difference in Average Income from 2007 to 2012")) +
+  xlab("Income Parameter") + ylab("States")
+}, height = 500, width = 1200)
+
+
+```
+
+**   **
+## **Relationship Between Facebook Penetration and Household Internet Usage - 2007**
+
+
+**Inputting the CSV into R**
+
+For this insight, I decided to use information from three different data tables: FacebookUsage, 2007AverageIncome, and 2007InternetUsage. I decided to use a left join to join these three tables in order to demonstrate the functionality of the left join. However, a right join or full outer join would have yielded the same result as the region columns all contained the same information for these three data sets. The code for this is shown in the screenshot below.
+
+Additionally, I decided to create a parameter for this insight detailing three different categories: low, medium, and high for the percentage of individuals that accessed the internet from home. This is also shown in the below screenshot.
+
+![](https://i.imgur.com/KRsdPLu.png)
+
+```{r}
+df_5 <- data.world::query(data.world::qry_sql
+("with q1 as (SELECT `2007income_cleaned`.average_household_income as AverageIncome2007, `2007income_cleaned`.region as States, `2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home as AccessInsideHouse2007
+FROM `2007income_cleaned`
+LEFT JOIN `2007internet_cleaned` ON `2007internet_cleaned`.region = `2007income_cleaned`.region),
+
+q2 as (SELECT q1.AverageIncome2007, q1.States, q1.AccessInsideHouse2007, facebook_cleaned.facebook_penetration as FacebookPenetration
+FROM q1
+LEFT JOIN `facebook_cleaned` ON `facebook_cleaned`.region = q1.States)
+
+SELECT q2.AverageIncome2007, q2.States, q2.AccessInsideHouse2007, q2.FacebookPenetration,
+CASE
+WHEN AccessInsideHouse2007 < 59 THEN 'LOW'
+WHEN AccessInsideHouse2007 > 70 THEN 'HIGH'
+ELSE 'MEDIUM'
+END AS LowMediumHighInternetAccess2007
+FROM q2"), dataset=project)
+
+
+```
+
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+The following graph shows that states with low internet usage in home also tended to have a lower average incomes while states with high internet usage tended to have higher average incomes. However, in the middle category, there were two clear discernible outliers that immediately struck me: D.C. and California.
+
+```{r}
+
+renderPlot({df_5 %>% ggplot() + geom_point(mapping=aes(x=LowMediumHighInternetAccess2007, y=AverageIncome2007, color = States)) + geom_boxplot(mapping=aes(x=LowMediumHighInternetAccess2007, y=AverageIncome2007)) + labs(title = "Average Income by Internet Access at Home (2007)", x="Category of Internet Access", y="Average Income")})
+
+
+```
+
+I decided to explore this further and see if I could understand why these outliers existed. I created a set of just these two states and compared their Facebook penetration and internet usage. Interestingly enough, I found that California was on the lower end of the scale while D.C. was completely on the complete opposite side at the very high end of the scale. D.C.'s number struck me as very interesting as the region boasted 260% Facebook penetration.
+
+```{r}
+
+renderPlot({df_5 %>% dplyr::filter(States %in% c('District of Columbia', 'California')) %>% ggplot(mapping =aes(x=LowMediumHighInternetAccess2007, y=AverageIncome2007, fill=States)) + geom_bar(stat='identity') + facet_wrap(~States)+ labs(title = "Average Income by Internet Access at Home (California / D.C.)", x="Category of Internet Access", y="Average Income")})
+
+renderPlot({df_5 %>% dplyr::filter(States %in% c('District of Columbia', 'California')) %>% ggplot(mapping = aes(x=FacebookPenetration, y=AverageIncome2007, color = States, size = 30)) + geom_point()+ labs(title = "Facebook Penetration With Respect to Average Income (California / D.C.)", x="Facebook Penetration", y="Average Income")})
+
+```
+
+At first glance, I thought this number was a mistake as it was greater than 100%. To explore this further, I went back to the website I pulled this data set from and found this quote in the footnote: "Please note D.C. penetration data is out of limits, this is probably due to non-resident Facebook users. " Interestingly enough, D.C.'s Facebook penetration number was inflated due to commuters coming into the region, most likely for work. Therefore, the Facebook penetration number was boasted as a multiple of the residential population in D.C.
+
+I found this insight to be even more interesting after I created a table calculation (mutate) of the cumulative sum and cumulative distance of Facebook penetration figures and average household income. There was a very apparent and strong relationship between both figures in both calculations
+
+```{r}
+
+renderPlot({df_5 %>% dplyr::filter(States != 'District of Columbia' & States != 'California') %>% dplyr::mutate(CumalativeSumFacebook = cumsum(FacebookPenetration), CumalativeSumIncome = cumsum(AverageIncome2007)) %>% ggplot(mapping = aes(x=CumalativeSumFacebook, y=CumalativeSumIncome, color=States)) + geom_point()+ labs(title = "Cumalative Sum of Facebook Penetration (-D.c./-California)", x=" Cumalative Sum of Facebook Penetration", y="Cumalative Sum of Average Income")})
+
+
+df_5a <- df_5 %>% dplyr::filter(States != 'District of Columbia' & States != 'California') %>% dplyr::mutate(ArrangedCumalativeDistanceFacebook = cume_dist(FacebookPenetration), CumalativeDistanceIncome = cume_dist(AverageIncome2007)) %>% arrange(ArrangedCumalativeDistanceFacebook)  
+
+df_5a$States <- factor(df_5a$States, levels=df_5a$States)
+
+renderPlot({df_5a %>% ggplot(mapping = aes(x=ArrangedCumalativeDistanceFacebook, y=CumalativeDistanceIncome, color=States)) + geom_point()+ labs(title = "Cumalative Distance of Facebook Penetration (-D.c./-California)", x=" Cumalative Distance of Facebook Penetration", y="Cumalative Distance of Average Income")})
+
+
+```
+
+**   **
+## **Relationship Between Facebook Penetration, Internet Penetration, and 20-24 Population - 2012**
+
+
+**Inputting the CSV into R**
+
+For this insight, I decided to use information from two different data tables: FacebookUsage, and 2012Population. I used an inner join to join these two tables together on region. The code for this is shown in the screnshot below.
+
+![](https://i.imgur.com/OUpG9Tj.png)
+
+```{r}
+
+df_6 <- data.world::query(data.world::qry_sql
+("SELECT `facebook_cleaned`.facebook_penetration as FacebookPenetration, `facebook_cleaned`.internet_penetration as InternetPenetration, `2012population_cleaned`.total_estimate_age_20_to_24_years as Population20to24, `2012population_cleaned`.region as States
+FROM `facebook_cleaned`
+JOIN 2012population_cleaned on `facebook_cleaned`.region = `2012population_cleaned`.region"), dataset=project)
+
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+A tree map of Facebook penetration relative to internet penetration shows that their doesn't seem to be a concrete relationship between the two. This is interesting as one would imagine that as internet penetration increases, Facebook penetration would also increase.
+
+```{r}
+
+df_6a <- df_6 %>% arrange(FacebookPenetration)
+df_6a$States <- factor(df_6a$States, levels=df_6a$States)
+
+
+renderPlot({
+ ggplot2::ggplot(data=df_6a, mapping = aes(area = FacebookPenetration, fill = InternetPenetration, label=States)) +
+ geom_treemap() +
+ geom_treemap_text(fontface = "italic", colour = "white", place = "topleft")+ labs(title = "Tree Map of Facebook Penetration Relative to Internet Penetration (fill = Internet Penetration, area = Facebook Penetration")
+})
+
+```
+
+However, as the second tree map shows, there seems to be a more discernible relationship between Facebook penetration and the population age 20-24 percentage. As that population penetration increases, Facebook penetration seems to also increase. This is clear in states like District of Columbia and North Dakota which have very high percentages of 20-24 year olds as well as a high Facebook penetration. This relationship is most likely attributed to the fact that much of the population on Facebook is young and in between the ages of 19 and 30.
+
+```{r}
+
+renderPlot({
+ ggplot2::ggplot(data=df_6a, mapping = aes(area = FacebookPenetration, fill = Population20to24, label=States)) +
+ geom_treemap() +
+ geom_treemap_text(fontface = "italic", colour = "white", place = "topleft") +  labs(title = "Tree Map of Facebook Penetration Relative to 20-24 Population (fill = 20 to 24 Population, area = Facebook Penetration")
+})
+
+```
+
+**   **
+## **Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )**
+
+**Inputting the CSV into R**
+
+For this insight, I used data from two sources: FacebookUsage and 2012Population. In Tableau, I decided to blend these two data sources instead of joining them together. This is shown in the screenshot below.
+
+![](https://i.imgur.com/UNiPVXZ.png)
+
+As can be seen in the above screenshot, both of the data sources have been blended on the region field.
+
+For R documentation purposes, I decided to do an inner join of the two datasets.
+
+For this insight, I also decided to create a view level calculated field that takes the male total population and divides it by the female total population. This is shown as part of the query in the screenshot below.
+
+![](https://i.imgur.com/n8STL18.png)
+
+
+
+```{r}
+
+df_7 <- data.world::query(data.world::qry_sql
+("SELECT `facebook_cleaned`.region as States, `facebook_cleaned`.internet_penetration as InternetPenetration, `2012population_cleaned`.male_total_population as MalePopulation, `2012population_cleaned`.female_total_population as FemalePopulation, `2012population_cleaned`.male_total_population / `2012population_cleaned`.female_total_population as MFRatio
+FROM `facebook_cleaned`
+JOIN `2012population_cleaned` ON `2012population_cleaned`.region = `facebook_cleaned`.region"), dataset=project)
+
+
+```
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+As the map below shows, it seems that the male to female ratio is least on the east coast and increases slowly as one goes towards the west coast. excluding Oregon and Washington This may be because there are opportunities in the east coast and in those two states that are more attractive to females and vice versa for males. However, it's very interesting to see that across the whole east coast, females are consistently the majority sex.
+
+Note: to calculate this field in Tableau, I used a fixed LOD calculation. In this following map example, I used group_by by States to do the same thing.
+
+![](https://i.imgur.com/Y39P4Hp.png)
+
+```{r}
+
+
+df_7a <- df_7 %>% dplyr::select(States, MFRatio) %>% group_by(States)
+
+
+names(df_7a) <- c("region", "value")
+df_7a$region <- tolower(df_7a$region)
+df_7a$region <- gsub(" (u.s. state)", "", df_7a$region, fixed=TRUE)
+renderPlot({state_choropleth(df_7a) + labs(title = "Male to Female Ratio by State")})
+
+
+```
+
+
+This next graph shows internet penetration by region. As can be seen, internet penetration seems to be the highest in the north east and in some states on the west coast. such as Oregon and Washington These are also areas that correlate with having lower male to female ratios.
+
+
+```{r}
+
+df_7b <- df_7 %>% dplyr::select(States, InternetPenetration) %>% group_by(States)
+
+
+names(df_7b) <- c("region", "value")
+df_7b$region <- tolower(df_7b$region)
+df_7b$region <- gsub(" (u.s. state)", "", df_7b$region, fixed=TRUE)
+renderPlot({state_choropleth(df_7b)+ labs(title = "Internet Penetration by State")})
+
+
+```
+
+However, interestingly enough, areas that are male dominant as shown in the graph below seem to have higher average internet penetration than areas that are female dominant. Therefore, we are most likely missing some sort of key trend / information that explains the relationship in the first two graphs such as a lurking variable.
+
+Note: to calculate whether or not there was a male / female majority, I used the ifelse function under mutate as shown in the screenshot below.
+
+![](https://i.imgur.com/OYoxz5l.png)
+
+
+```{r}
+
+
+df_7c <- df_7 %>% dplyr::mutate(MFMajority= ifelse(MFRatio<=1, 'FemaleMajority', ifelse(MFRatio>1, 'MaleMajority', 'NA')))
+
+renderPlot({df_7c %>% ggplot() + geom_boxplot(mapping = aes(x=MFMajority, y=InternetPenetration)) + geom_point(mapping = aes(x=MFMajority, y=InternetPenetration, color = States))+labs(title = "Internet Penetration by Male / Female Majority", x=" Male / Female Majority", y="Internet Penetration")})
+
+
+```
+
+**   **
+## **Relationship between In-home and Out of Home Internet Access for 2007/2012**
+
+**Inputting the CSV into R**
+
+For this insight, I used data from two tables: 2007InternetUsage and 2012InternetUsage. I used an inner join on Tableau in order to join these two tables together on region. However, I used a right join in the following data.world SQL in order to demonstrate its functionality. Because the nomenclature and row values were the same for the column I was joining on, a left join or a inner join would have resulted in the same output.
+
+Additionally, I created a view-level calculated field that takes the sum of the number of people using the internet in home and divides it by the sum of the number of people using the internet out of the home. The following screenshot shows that calculation for 2007 and 2012 data respectively.
+
+![](https://i.imgur.com/asjUhu4.png)
+
+
+```{r}
+
+df_8 <- data.world::query(data.world::qry_sql
+                          
+("with `q1` as (SELECT `2007internet_cleaned`.region as States, `2007internet_cleaned`.number_of_individuals_who_access_internet_outside_of_household as 2007AccessOutsideHome, `2007internet_cleaned`.number_of_individuals_who_access_internet_from_home as 2007AccessFromHome,
+`2012internet_cleaned`.number_of_individuals_who_access_internet_outside_of_household as 2012AccessOutsideHome, `2012internet_cleaned`.number_of_individuals_who_access_internet_from_home as 2012AccessFromHome
+FROM `2007internet_cleaned`
+RIGHT JOIN `2012internet_cleaned` on `2007internet_cleaned`.region = `2012internet_cleaned`.region)
+
+SELECT `q1`.States, sum(`q1`.2007AccessFromHome)/sum(`q1`.2007AccessOutsideHome) as AccessRatio2007, sum(`q1`.2012AccessFromHome)/sum(`q1`.2012AccessOutsideHome) as AccessRatio2012
+FROM `q1` GROUP BY `q1`.States"), 
+
+dataset=project)
+
+
+```
+
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. The code for this is shown below.
+
+![](https://i.imgur.com/b9c12YL.png)
+
+```{r}
+
+df_9 <- df_8 %>%tidyr::gather("YearAccessRatio", "Ratio",	-1)
+
+
+```
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+In the following set of graphs, the plot of 2012 region versus the ratio is the bottom plot while 2007 region versus the ratio is the top plot. As can be seen, for 2012, every single state is below the 1.00 constant line which shows that all states have more people using the internet out of the home than in the home. The plot for 2007 paints a different story where almost every single state is above the 1.00 constant line accentuating that more people use the internet in the home. This development is interesting and is most likely caused by some lurking variable. I believe it may be due to the prevalence of internet usage in the work place over time. This is very counter-intuitive to what I initially thought. I believed that as computers and internet access got cheaper, more people would use it in-home which does not seem to be the case.
+
+Additional note: I used a regular expression on the gathered data frame to filter rows that contained any character, then 12 (2012) as well as any character, then 07 (2007) to get rid of the appropriate rows from the table. The code for that is shown below.
+
+![](https://i.imgur.com/d0OBDdg.png)
+
+![](https://i.imgur.com/qIyuCYI.png)
+
+
+
+```{r}
+df_8a <- df_9 %>% dplyr::filter(!grepl(".*12", YearAccessRatio)) %>% dplyr::arrange(Ratio)
+
+df_8a$States <- factor(df_8a$States, levels=df_8a$States)
+
+
+renderPlot({df_8a %>% ggplot(mapping = aes(x=States, y=Ratio, color = States)) + geom_point() + geom_smooth(method = "lm", se=FALSE) + theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "2007 Access From Home to 2007 Access Outside of Home", x="State", y="Access Ratio") + geom_hline(yintercept=1.00, color = "blue")})
+
+
+
+df_8b <- df_9 %>% dplyr::filter(!grepl(".*07", YearAccessRatio))%>% dplyr::arrange(Ratio)
+
+df_8b$States <- factor(df_8b$States, levels=df_8b$States)
+
+
+renderPlot({df_8b %>% ggplot(mapping = aes(x=States, y=Ratio, color = States)) + geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "2012 Access From Home to 2012 Access Outside of Home", x="State", y="Access Ratio") + geom_hline(yintercept=1.00, color = "blue")})
+
+```
+
+To further back this point, I decided to calculate the pane median in Tableau. With a pane median below 1 for 2012, we see that the "middle" or average state tends to have more people use the internet outside the home as a ratio to in the home. With a pane median above 1 for 2007, we see that the "middle" or average state tends to have more people use the internet in the home as a ratio to outside the home.
+
+
+```{r}
+
+MedianRatios <- df_8 %>% summarize(MedianRatio2007 = median(`AccessRatio2007`), MedianRatio2012 = median(`AccessRatio2012`))
+
+
+renderDataTable({
+  DT::datatable(MedianRatios, rownames = FALSE,
+                extensions = list(Responsive = TRUE, FixedHeader = TRUE)
+  )
+})
+
+renderPlot({df_8a %>% ggplot(mapping = aes(x=States, y=Ratio, color = States)) + geom_point() + geom_smooth(method = "lm", se=FALSE) + theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "2007 Access From Home to 2007 Access Outside of Home", x="State", y="Access Ratio") + geom_hline(yintercept=1.05544, color = "blue")})
+
+
+renderPlot({df_8b %>% ggplot(mapping = aes(x=States, y=Ratio, color = States)) + geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1))+ labs(title = "2012 Access From Home to 2012 Access Outside of Home", x="State", y="Access Ratio") + geom_hline(yintercept=0.924915, color = "blue")})
+
+
+```
+
+**   **
+## **Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets**
+
+**Inputting the CSV into R**
+
+For this insight, I used data from two tables: 2007InternetUsage and 2007Income. I used an inner join on Tableau to join these two data sets together.
+
+In the following screenshot, I created a calculated field in order to bin together regions with low average median incomes, medium average median incomes, and high average median incomes.
+
+![](https://i.imgur.com/JkwNTSn.png)
+
+
+```{r}
+
+df_10 <- data.world::query(data.world::qry_sql
+                          
+("with `q1` as (SELECT `2007income_cleaned`.average_household_income as AverageIncome, `2007internet_cleaned`.percent_of_individuals_who_access_internet_outside_of_household as OutsideHouse2007, `2007income_cleaned`.region as States
+FROM `2007income_cleaned`
+JOIN `2007internet_cleaned` ON `2007internet_cleaned`.region = `2007income_cleaned`.region)
+
+SELECT `q1`.States, `q1`.AverageIncome, `q1`.OutsideHouse2007,
+CASE 
+WHEN `q1`.AverageIncome < 60000 THEN 'Low'
+WHEN `q1`.AverageIncome > 75000 THEN 'High'
+ELSE 'Medium'
+END AS IncomeBrackets
+FROM `q1`"), dataset=project)
+
+```
+
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+As seen in the following graph, the maximum discrepancy in internet access outside the household does not seem to change as income brackets goes up. This means that the maximum value of a region with internet access outside the household minus the minimum value of a region with internet access outside the household in each income bracket stays relatively the same as income brackets transition from low to high.
+
+I specifically chose percentage of users with internet access outside the household as I initially hypothesized that after a certain income level, the discrepancy in internet usage outside the household among two states would go down. However, I found that there was no real discernible relationship.
+
+The values I calculated were as follows:
+
+Max Access - Min Access Value = Discrepency by Income Bracket Low: 16.7% Medium: 16.4% High: 17.3%
+
+Below is the graph I used to calculate these values
+
+```{r}
+
+IncomeBracket<- c("Low", "Medium", "High")
+MaxDiscrepency <- c("16.7%", "16.4%", "17.3%")
+df_11<-data.frame(IncomeBracket, MaxDiscrepency)
+
+
+renderDataTable({
+  DT::datatable(df_11, rownames = FALSE,
+                extensions = list(Responsive = TRUE, FixedHeader = TRUE)
+  )
+})
+
+
+df_10a <- df_10 %>% dplyr::arrange(OutsideHouse2007)
+df_10a$States <- factor(df_10a$States, levels=df_10a$States)
+
+renderPlot({df_10a %>% ggplot(mapping = aes(x=States, y=OutsideHouse2007, color = States)) + geom_point() + facet_wrap(~IncomeBrackets) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Internet Usage Outside House by Income Bracket (2007)", x="State", y="Outside House Usage")})
+
+```
+
+**   **
+##**Percent of Individuals Who Accessed The Internet from Home in 2007 and 2012**
+
+**Inputting the CSV into R**
+
+![](https://i.imgur.com/RsWu0Ft.png)
+
+```{r}
+df1 <- data.world::query(data.world::qry_sql("SELECT `2012internet_cleaned`.region as region,`2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home as 2007, `2012internet_cleaned`.percent_of_individuals_who_access_internet_from_home as 2012 FROM `2007internet_cleaned` LEFT JOIN `2012internet_cleaned` ON `2007internet_cleaned`.region = `2012internet_cleaned`.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+![](https://i.imgur.com/0dVSzCd.png)
+
+```{r}
+df1a <- df1 %>%tidyr::gather("Year", "Percent",	-1)
+```
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+After the data was joined I chose to analyze the percent of individuals that accessed the internet for each state and compare the year 2007 to 2012. The plots below illustrate two bar charts that show the percent of individuals that accessed the internet from home for both years and also shows the average percent internet usage across all the states. For the year 2007 the average internet usage was 67.21% percent, for the year 2012 the average internet usage was 69.99%. It appears that internet usage increased by 2.78% over a span of 5 years. This is lower than what I expected because many new devices (such as the Apple iPad) came out in that five year period that should have boosted internet usage from home at a higher rate.
+
+```{r}
+
+inputPanel(
+  selectInput("selectRegiondf1", label = "Select Region",
+              choices = df1$region, multiple=TRUE, selected=df1$region)
+)
+
+renderPlot({
+df1a %>% dplyr::filter(region == input$selectRegiondf1, !grepl(".*12$", Year)) %>%
+ggplot() + geom_bar(mapping = aes(x = region, y = Percent),stat="identity", position = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Percent of Individuals who Accessed Internet Data from Home in 2007", x="Region", y="Percent")
+})
+
+renderPlot({
+df1a %>% dplyr::filter(!grepl(".*07$", Year)) %>%
+ggplot() + geom_bar(mapping = aes(x = region, y = Percent),stat="identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Percent of Individuals who Accessed Internet Data from Home in 2012", x="Region", y="Percent")
+})
+
+df1b <- df1 %>% dplyr::summarize(`2007AvgPercentInternetUsage` = mean(`2007`), `2012AvgPercentInternetUsage` = mean(`2012`))
+
+renderDataTable({
+ DT::datatable(df1b, rownames = FALSE,
+ extensions = list(Responsive = TRUE, FixedHeader = TRUE))
+})
+  
+```
+
+**   **
+## **Levels of Internet Usage by State and Average Income by State for the Years 2007/2012**
+
+**Inputting the CSV into R**
+
+Querying the data from the 2007 and 2012 internet access data tables has been done the "Utilizing dplyr"" section of this insight because it must be done under the eventReactive function. The query for the barcharts analyzing the average household income data is shown below.
+
+![](https://i.imgur.com/GCtyGoN.png)
+
+```{r}
+df3a <- data.world::query(data.world::qry_sql("SELECT `2012income_cleaned`.region as region, `2007income_cleaned`.average_household_income as 2007AvgHouseholdIncome, 
+`2012income_cleaned`.average_household_income as 2012AvgHouseholdIncome
+FROM `2007income_cleaned` JOIN `2012income_cleaned` ON `2007income_cleaned`.region = `2012income_cleaned`.region"), dataset = project)
+
+df3b <- data.world::query(data.world::qry_sql("SELECT region, `2007income_cleaned`.average_household_income as 2007AvgHouseholdIncome FROM `2007income_cleaned` WHERE region = 'Alabama' OR region = 'Louisiana' OR region = 'Mississippi' OR region = 'Texas'"), dataset = project)
+
+df3c <- data.world::query(data.world::qry_sql("SELECT region, `2012income_cleaned`.average_household_income as 2012AvgHouseholdIncome FROM `2012income_cleaned` WHERE region = 'Alabama' OR region = 'Louisiana' OR region = 'Mississippi' OR region = 'Texas'"), dataset = project)
+
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+To further analyze the data I joined in a previous insight, I decided to create a new discrete variable that looks at low, medium and high internet usage. I queried the data using a CASE statement to replicate the parameters and calculated field I created in Tableau. The query resulted in a new discrete variable so I could analyze low, medium and high usage of the internet from home. The plot below shows the results.
+
+Finally I created two crosstabs to visualize the information for both years. For both years it appears that Mississippi has the lowest percentage of internet usage in the country and New Hampshire has the highest level of usage. Interestingly, Texas, Louisiana, Alabama, and Mississippi all fell under the low usage category for both years. It appears that southern states have the lowest levels of internet usage.
+
+```{r}
+
+inputPanel(
+  selectInput("selectRegiondf2", label = "Select Region",
+              choices = df1$region, multiple=TRUE, selected= df1$region)
+)
+
+df2a <- eventReactive(c(input$selectRegiondf2), { 
+  project <- "https://data.world/apk585/f-17-edv-project-5" 
+  data.world::set_config(cfg_env("DW_API")) 
+  paramQuery <- data.world::qry_sql(
+   "   
+with q1 as (SELECT `2007internet_cleaned`.region as region, `2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home,
+CASE
+WHEN `2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home < 62 THEN 'Low'
+WHEN `2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home >= 72 THEN 'High'
+ELSE 'Medium'
+END as usage_level
+FROM `2007internet_cleaned`)
+
+SELECT percent_of_individuals_who_access_internet_from_home as Percent2007IAHome, region, usage_level
+FROM q1
+
+   ")
+ paramQuery$params <- c(input$selectRegiondf2)
+ data.world::query(paramQuery, dataset = project)
+}) 
+
+renderPlot({df2a() %>% dplyr::filter(region == input$selectRegiondf2) %>% ggplot() + 
+  geom_text(aes(x=usage_level, y=region, label=Percent2007IAHome), size=6) +
+  geom_tile(aes(x=usage_level, y=region, fill=usage_level), alpha=0.50) +
+    theme(legend.text=element_text(size=20)) +
+    theme(axis.text=element_text(size=20),
+    axis.title=element_text(size=20, face="bold"))  + 
+    theme(plot.title = element_text(size = 30, face = "bold")) +
+    ggtitle(paste("Percent of Individuals who Accessed Internet Data from Home in 2007")) +
+  xlab("Usage Level") + ylab("Region")
+}, height = 500, width = 1200)
+  
+
+df2b <- eventReactive(c(input$selectRegiondf2), { 
+  project <- "https://data.world/apk585/f-17-edv-project-5" 
+  data.world::set_config(cfg_env("DW_API")) 
+  paramQuery <- data.world::qry_sql(
+   "SELECT `2012internet_cleaned`.region as region, `2012internet_cleaned`.percent_of_individuals_who_access_internet_from_home as Percent2012IAHome FROM `2012internet_cleaned`")
+  
+ paramQuery$params <- c(input$selectRegiondf2)
+ data.world::query(paramQuery, dataset = project)
+}) 
+
+renderPlot({df2b() %>% dplyr::filter(region == input$selectRegiondf2) %>% dplyr::mutate(usage_level = ifelse(Percent2012IAHome < 62, 'Low', ifelse(Percent2012IAHome >= 72, 'High', 'Medium'))) %>% ggplot() + 
+  geom_text(aes(x=usage_level, y=region, label=Percent2012IAHome), size=6) +
+  geom_tile(aes(x=usage_level, y=region, fill=usage_level), alpha=0.50) +
+    theme(legend.text=element_text(size=20)) +
+    theme(axis.text=element_text(size=20),
+    axis.title=element_text(size=20, face="bold"))  + 
+    theme(plot.title = element_text(size = 30, face = "bold")) +
+    ggtitle(paste("Percent of Individuals who Accessed Internet Data from Home in 2012")) +
+  xlab("Usage Level") + ylab("Region")
+}, height = 500, width = 1200)
+  
+```
+
+I decided to look at the income levels for the southern states that have the lowest internet usage so I performed an inner join on region to bring in the average household income for the years 2007 and 2012.
+
+The plots shown below illustrate the average income for households by state. Interestingly, the states with the lowest average income appear to overlap with the states that have the lowest internet usage levels. Some families in these southern states may not be able to afford an internet connection and therefore do not use the internet at home. I created a set of the southern states that fell under the low category and displayed them, the average household income for all four states fall under the national average for the year 2007 and in 2012 Alabama, Mississippi and Louisiana fall under the national average.
+
+```{r}
+
+inputPanel(
+  selectInput("selectRegiondf3", label = "Select Region",
+              choices = df3a$region, multiple=TRUE, selected=df3a$region)
+)
+
+renderPlot({
+df3a %>% dplyr::filter(region == input$selectRegiondf3) %>% arrange(`2007AvgHouseholdIncome`) %>%
+ggplot() + geom_bar(mapping = aes(x = region, y = `2007AvgHouseholdIncome`),stat="identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Average Household Income by State 2007", x="Region", y="Income")
+})
+
+renderPlot({
+df3b %>% ggplot() +
+    geom_bar(mapping = aes(x = region, y = `2007AvgHouseholdIncome`, fill = region), stat = "identity") + labs(title = "Average Household Income by State 2007", x="Region", y="Income")
+})
+
+renderPlot({
+df3a %>% dplyr::filter(region == input$selectRegiondf3) %>%
+    arrange(`2012AvgHouseholdIncome`) %>%
+ggplot() + geom_bar(mapping = aes(x = region, y = `2012AvgHouseholdIncome`),stat="identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Average Household Income by State 2012", x="Region", y="Income")
+})
+
+renderPlot({
+df3c %>% ggplot() +
+    geom_bar(mapping = aes(x = region, y = `2012AvgHouseholdIncome`, fill = region), stat = "identity") + labs(title = "Average Household Income by State 2007", x="Region", y="Income")
+})
+
+  
+```
+
+**   **
+## **Facebook Penetration and its Relationship to Average Household Income**
+
+**Inputting the CSV into R**
+
+I joined 2012 Facebook data with 2012 Income data using an inner join as can be seen in the query below.
+
+![](https://i.imgur.com/netMFBI.png)
+
+```{r}
+df4 <- data.world::query(data.world::qry_sql("SELECT facebook_cleaned.facebook_penetration as FBPenetration, facebook_cleaned.region as region, 
+`2012income_cleaned`.average_household_income as AvgHouseholdIncome FROM facebook_cleaned JOIN `2012income_cleaned` ON `2012income_cleaned`.region = facebook_cleaned.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+Looking at the Facebook Penetration percentages in the histogram below, it can be seen that the percentage of Facebook usage falls between 36% and 48% for a majority of the states. A few states like Rhode Island, Illinois and Washington state use Facebook at a much higher percentage than the rest of the country.
+
+```{r}
+renderPlot({
+  df4 %>% dplyr::filter(region != "District of Columbia") %>% ggplot() + geom_histogram(mapping = aes(x = FBPenetration, fill = region), binwidth = 3) + labs(title = "Histogram of Facebook Penetration", x="Facebook Penetration Percent", y="Count")
+})
+```
+
+I decided to test whether the average household income had anything to do with Facebook penetration percentages. In a previous insight I found that southern states had the lowest internet usage at home and the same states had some of the lowest averages for household income. Therefore I hypothesized that Facebook usage would be higher in states that have a higher average household income as well because social media is a common use of the internet. According to the plot, Facebook penetration generally appears to increase as the average income increases but there appears to be no clear correlation between the two. This goes against what I initially hypothesized because I expected to see higher social media usage in areas that are more affluent.
+
+It appears that the three states that use Facebook at a higher percentage than the rest of the country (Rhode Island, Illinois, and Washington state) fall slightly above the average Facebook penetration percentage and the average household income for the country but are not among the states with the highest average income in the country as I hypothesized.
+
+```{r}
+
+renderPlot({
+  df4 %>% dplyr::filter(region != "District of Columbia") %>% ggplot() + geom_point(mapping = aes(x = AvgHouseholdIncome, y = FBPenetration, color = region)) + labs(title = "Facebook Penetration vs Average Household Income", x="Average Household Income", y="Facebook Penetration")
+})
+
+
+```
+
+**   **
+## **Correlation Between Average Household Income and Internet Penetration**
+
+**Inputting the CSV into R**
+
+Based on the conclusions I arrived to in a previous insight about Facebook Penetration and Average Household Income, I decided to take it a step further and look at Internet Penetration percentages in comparison to the Average Household Income. As can be seen in the query below, I joined the data on the variable "region".
+
+![](https://i.imgur.com/pZU4ZWK.png)
+
+
+On tableau I visualized the data by blending it instead of joining it, the screenshot below demonstrates blending the data and establishing a relationship on the base of the variable "region" in both data sets. More information on the blending can be found in the link at the end of the insight.
+
+![](https://i.imgur.com/suIdePF.png)
+
+```{r}
+df5 <- data.world::query(data.world::qry_sql("SELECT `2012income_cleaned`.average_household_income as AvgIncome, facebook_cleaned.region as region, facebook_cleaned.internet_penetration as InternetPenetration
+FROM `2012income_cleaned`JOIN facebook_cleaned ON `2012income_cleaned`.region = facebook_cleaned.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+I plotted internet penetration percentages against the average household income data. As can be seen in the scatterplot below, at least 50% of the population uses the internet in every state. A general trend line shows that as the average household income increases, the percent of internet penetration increases as well.
+
+```{r}
+renderPlot({
+  df5 %>% ggplot(mapping = aes(x = AvgIncome, y = InternetPenetration)) + geom_point() + geom_smooth(method = "lm", se = FALSE) + labs(title = "Correlation Between Average Household Income and Internet Penetration", x="Average Income", y="Internet Penetration")
+})
+```
+
+An outlier in the data is the District of Columbia which has the highest average household income in the country but falls below the average for internet penetration percentage. To see where DC falls compared to the rest of the country when it comes to internet penetration percentages, I calculated the percent rank for each state in the mutate function. I plotted the state rankings against the states to see how they fell in the range between 0 and 1. It appears that D.C. is ranked .36 which is fairly low for the nation's capital and center of government operations. Additionally, considering that it is has the highest average household income in the nation, this is an interestingly low ranking for D.C.
+
+```{r}
+renderPlot({
+  df5 %>% dplyr::mutate(Rank = percent_rank(InternetPenetration)) %>% dplyr::arrange(Rank) %>% ggplot() + geom_point(mapping = aes(x = region, y = Rank)) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "Percentile Rankings of Internet Usage by State", x="Region", y="Rank")
+})
+
+```
+
+**   **
+## **Difference in Income by State for 2007-2012**
+
+**Inputting the CSV into R**
+
+For the following insight I full joined the average household income data for the years 2007 and 2012 on the variable "region."
+
+![](https://i.imgur.com/t7jGZF7.png)
+
+```{r}
+df6 <- data.world::query(data.world::qry_sql("SELECT `2012income_cleaned`.region as region, `2012income_cleaned`.average_household_income as 2012, `2007income_cleaned`.average_household_income as 2007
+FROM `2007income_cleaned` FULL JOIN `2012income_cleaned` ON `2007income_cleaned`.region = `2012income_cleaned`.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+![](https://i.imgur.com/2DtZ87s.png)
+
+```{r}
+df6a <- df6 %>%tidyr::gather("Year", "AverageIncome",	-1)
+```
+
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+I created a facet-wrapped bar chart that displays the average household income for each year by region. By looking at this bar chart alone it is difficult to extrapolate information about the difference in income for each state in this five year period. To get around this issue in Tableau I created a level of detail expression that calculates the difference in the income between the years 2007 and 2012 for each state. The screenshot displaying this is below. In R the difference was calculated using the lag function within dplyr mutate.
+
+![](https://i.imgur.com/t0evPrZ.png)
+
+```{r}
+
+renderPlot({
+df6a %>% dplyr::select(region, Year, AverageIncome) %>% 
+    ggplot() + geom_bar(mapping = aes(x = region, y = AverageIncome), stat = 'identity') + facet_wrap(~Year) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(title = "A Comparison of Average Household Income for 2007 & 2012", x="Region", y="Average Household Income")
+  
+})
+
+df6b <- df6a %>% dplyr::group_by(region) %>% mutate(DifferenceIncome = lag(AverageIncome) - AverageIncome) %>% dplyr::filter(Year == "2007")
+
+```
+
+As can be seen in the box plot below, over 90% of the states had a positive difference in income indicating that the average household income increased. This could be due to several factors (inflation, changes in local/state taxes, etc). The state with the highest difference in income was North Dakota with a difference of 16 thousand dollars. North Dakota is followed by D.C. which had an income increase of 13 thousand. Both of these states are outliers in the data set. The state with the largest negative difference was Nevada, the average income of which dropped by 6 thousand dollars from 2007 to 2012.
+
+```{r}
+
+renderPlot({
+df6b %>% ggplot() + geom_boxplot(mapping = aes(x = Year, y = DifferenceIncome)) + labs(title = "Difference in Average Household Income 2007/2012", x="", y="Difference in Income")
+})
+
+```
+
+To look at the rest of the states by removing these outliers, I created a map using a color gradient to show the difference in the average income. I removed the three outliers and found that South Dakota had the largest positive difference income and Florida had the largest negative difference. Only four states had a negative change in average income and these states were Florida, Idaho, Arizona and Georgia.
+
+```{r}
+
+df6c <- df6b %>% dplyr::select(region, DifferenceIncome) %>% dplyr::filter(region != "North Dakota", region != "Nevada", region != "District of Columbia")
+
+names(df6c) <- c("region","value")
+df6c$region <- tolower(df6c$region)
+df6c$region <- gsub(" (u.s. state", "", df6c$region, fixed = TRUE)
+renderPlot({state_choropleth(df6c)})
+  
+```
+**   **
+## **Internet Usage at Home and its Correlation with the 65-69 Year Old Population**
+
+**Inputting the CSV into R**
+
+For the following insight I inner joined four data frames, population figures for 2007 and 2012 and internet usage figures for 2007 and 2012.
+
+![](https://i.imgur.com/bLEjbgm.png)
+
+```{r}
+df7 <- data.world::query(data.world::qry_sql("SELECT `2007population_cleaned`.region as region, 
+`2007internet_cleaned`.percent_of_individuals_who_access_internet_from_home as PercentIAHome, 
+`2007population_cleaned`.total_estimate_total_population_age_65_to_69_years as Percent65to69Pop, `2007population_cleaned`.total_estimate_total_population_age_30_to_34_years as Percent30to34Pop
+FROM `2007internet_cleaned` JOIN `2007population_cleaned` ON `2007internet_cleaned`.region = `2007population_cleaned`.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+On tableau, I created a dashboard displaying two packed bubbles plots. For the rmd I created a map instead, but I provided a screenshot of the packed bubbles plot and more information about it can be found in the link at the end of this insight. 
+
+![](https://i.imgur.com/pEqxZek.png)
+
+
+The first map displays internet usage at home by state for the year 2007, the second displays the population percent of 65-69 year olds by state. I wanted to look at how the population percent of the 65-69 year olds compares to the percent of people using the internet at home. Based on the plots it appears that the two states (Utah and Alaska) that have the highest percent of internet usage at home also have the lowest percent of 65-69 year olds. The opposite seems to hold true as well, as West Virginia is one of the states with the lowest percentage of internet usage and it has the highest percent of 65-69 year olds in the country.
+
+This general trend makes sense as older people are less likely to use the internet as often as younger people. I decided to compare internet usage percentages against the population percentages of 30-34 year olds by state as well to confirm my hypothesis. Based on the maps shown below the states that have a high percent of internet usage at home have a much higher percent of 30-34 year olds than they do 65-69 year olds.
+
+```{r}
+
+df7a <- df7 %>% dplyr::select(region, PercentIAHome)
+df7b <- df7 %>% dplyr::select(region, Percent65to69Pop)
+df7c <- df7 %>% dplyr::select(region, Percent30to34Pop)
+
+names(df7a) <- c("region","value")
+df7a$region <- tolower(df7a$region)
+df7a$region <- gsub(" (u.s. state", "", df7a$region, fixed = TRUE)
+renderPlot({state_choropleth(df7a)})
+
+names(df7b) <- c("region","value")
+df7b$region <- tolower(df7b$region)
+df7b$region <- gsub(" (u.s. state", "", df7b$region, fixed = TRUE)
+renderPlot({state_choropleth(df7b)})
+```
+
+This general trend makes sense as older people are less likely to use the internet as often as younger people. I decided to compare internet usage percentages against the population percentages of 30-34 year olds by state as well to confirm my hypothesis. Based on the maps shown below the states that have a high percent of internet usage at home have a much higher percent of 30-34 year olds than they do 65-69 year olds.
+
+```{r}
+names(df7c) <- c("region","value")
+df7c$region <- tolower(df7c$region)
+df7c$region <- gsub(" (u.s. state", "", df7c$region, fixed = TRUE)
+renderPlot({state_choropleth(df7c)})
+```
+
+
+**   **
+## **Facebook Penetration for 15-19 Year Olds Versus 40-44 Year Olds**
+
+**Inputting the CSV into R**
+
+I decided to join 2012 Facebook data with 2012 Population data to compare the percent of younger people to middle aged adults in regions that have a higher Facebook penetration percentage.
+
+![](https://i.imgur.com/Q9fgQZp.png)
+
+```{r}
+df8 <- data.world::query(data.world::qry_sql("SELECT `2012population_cleaned`.region as region, `2012population_cleaned`.total_estimate_age_15_to_19_years as Percent15to19Population, `2012population_cleaned`.total_estimate_age_40_to_44_years as Percent40to44Population, facebook_cleaned.facebook_penetration as FBPenetration FROM facebook_cleaned JOIN `2012population_cleaned` ON facebook_cleaned.region = `2012population_cleaned`.region"), dataset = project)
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+Social media is generally a young person's pass-time but in recent years there has been a surge of middle aged users creating accounts on outlets like Facebook. In some regions the percent of middle aged adults may even exceed the population of younger adults.
+
+I isolated three states with a high Facebook penetration percentage. As can be seen in the plots below, the state of Washington has a very high Facebook penetration percentage. The percent of 15-19 year olds in the state is 6.5% while the percent of 40-44 year olds is higher at 6.8%. New Jersey, another state with a high Facebook penetration percentage, has 6.6% 15-19 year olds and 7.2% 40-44 year olds. Lastly, Alaska has 6.8% 15-19 year olds and 6.9% 40-44 year olds. As hypothesized, the percent of middle aged adults indeed exceeds the population of younger adults.
+
+```{r}
+
+renderPlot({df8 %>% dplyr::select(region, FBPenetration) %>% dplyr::filter(region %in% c("Washington", "Alaska", "New Jersey")) %>% ggplot() + geom_bar(mapping = aes(x = region, y = FBPenetration, fill = region), stat = "identity") + labs(title = "Facebook Penetration Percent by State", x="Region", y="Percent")
+})
+
+renderPlot({df8 %>% dplyr::select(region, Percent15to19Population) %>% dplyr::filter(region %in% c("Washington", "Alaska", "New Jersey")) %>% ggplot() + geom_bar(mapping = aes(x = region, y = Percent15to19Population, fill = region), stat = "identity") + labs(title = "Percent of 15-19 Year Olds by State", x="Region", y="Percent")
+})
+
+renderPlot({df8 %>% dplyr::select(region, Percent40to44Population) %>% dplyr::filter(region %in% c("Washington", "Alaska", "New Jersey")) %>% ggplot() + geom_bar(mapping = aes(x = region, y = Percent40to44Population, fill = region), stat = "identity") + labs(title = "Percent of 40-44 Year Olds by State", x="Region", y="Percent")
+})
+
+```
+
+**   **
+## **Trends in percent changes between 2007 and 2012 by state of household income and home internet usage (very Interesting)**
+
+**Inputting the CSV into R**
+
+I wanted to analyze the patterns of income and internet usage between 2007 and 2012. Therefore, I joined 2012 and 2007 tables of internet usage in one query and 2012 and 2007 tables of household income in a second query. Since populations could change, I decided to use percents because it was a much easier measure to compare. In the query itself, I created a column that calculated the percent difference of number of home internet users in 2012 versus the number of people in 2007. The second query contained a column that  calculated the percent change of average household income in 2012 vs 2007.
+
+```{r}
+df_z <- data.world::query(data.world::qry_sql
+("SELECT `2007Internet_cleaned`.number_of_individuals_who_access_internet_from_home AS 2007IAHome,
+`2012internet_cleaned`.number_of_individuals_who_access_internet_from_home AS 2012IAHome,
+`2007Internet_cleaned`.region as State, (`2012Internet_cleaned`.number_of_individuals_who_access_internet_from_home-`2007Internet_cleaned`.number_of_individuals_who_access_internet_from_home)/`2007Internet_cleaned`.number_of_individuals_who_access_internet_from_home*100 as home_percent_difference
+FROM `2012internet_cleaned`
+JOIN 2007Internet_cleaned ON `2012Internet_cleaned`.region  = `2007Internet_cleaned`.region"), dataset=project)
+
+df_y <- data.world::query(data.world::qry_sql
+("SELECT `2007Income_cleaned`.average_household_income AS 2007AVI, `2012Income_cleaned`.average_household_income AS 2012AVI, `2012Income_cleaned`.region as State,
+(`2012Income_cleaned`.average_household_income-`2007Income_cleaned`.average_household_income)/`2007Income_cleaned`.average_household_income*100 as income_percent_difference
+FROM 2012Income_cleaned
+JOIN 2007Income_cleaned ON `2012Income_cleaned`.region  = `2007Income_cleaned`.region"), dataset=project)
+
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+When looking at the average percent difference between change in income and change in home internet usage, one state stood out in particular. Idaho had a 3.10% decrease in average household income from 2007 to 2012. However, the average number of people who had access to internet at home increased by 34.18%, the largest increase of any state. This seemed highly unusual; however when doing some research, it seemed that Idaho had a program between 2004 and 20014 that widended the scope of internet by increaseing the number of households with broadband. The average household income went down bcause mnay privite sector and tech companies were hireing big time but not a lot of them were located in Idaho.
+
+```{r}
+
+renderPlot({df_z %>%  dplyr::select(State,home_percent_difference)%>% ggplot() + geom_bar(mapping = aes(x=State, y= home_percent_difference, fill = "blue"), stat="identity") + labs(title = "Home Internet Usage Percent Difference by State 2007 - 2012", x="State", y="Percent Change")})
+
+renderPlot({df_y %>% dplyr::select(State,income_percent_difference)%>% ggplot() + geom_bar(mapping = aes(x=State, y= income_percent_difference, fill = "green"), stat="identity") + labs(title = "Average Household Income Percent Difference by State 2007 - 2012", x="State", y="Percent Change")})
+
+
+```
+
+**   **
+## **Relations between internet usage at home versus internet usage outside of the home from 2007 to 2012**
+
+
+**Inputting the CSV into R**
+
+I wanted to see the relation between home internet usage and outside the house internet usage in 2007 and 2012. I created two seperate querys, one for 2007 and one for 2012 that pulled the numbe rof individuals who accessed internet from home and from outside of home for each state.
+
+```{r}
+
+df_w <- data.world::query(data.world::qry_sql
+("SELECT `2007Internet_Cleaned`.number_of_individuals_who_access_internet_from_home AS IA_2007_Home,
+`2007Internet_Cleaned`.number_of_individuals_who_access_internet_outside_of_household AS IA_2007_Outside,
+`2007Internet_Cleaned`.region as State 
+FROM 2007Internet_Cleaned"), dataset=project)
+
+
+df_x <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.number_of_individuals_who_access_internet_from_home AS IA_2012_Home,
+`2012Internet_Cleaned`.number_of_individuals_who_access_internet_outside_of_household AS IA_2012_Outside,
+`2012Internet_Cleaned`.region as State
+FROM 2012Internet_Cleaned"), dataset=project)
+
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+In 2007, there were actually more people using the internet from home, than there were people using the internet outside of the household. In 2012, the exact opposite is observed. This may be due to advancements in technology and internet efficiency and a wider spread of internet across the globe. More and more small and large businesses began involving more internet based services. For example, coffee shops are now almost expected to have a free internet service, and more people are using this as a place to do work, instead of at home. This most likely drove the number of people using the internet outside the home. It can be seen clearly when comparing to the total US number.
+
+```{r echo=TRUE}
+
+renderPlot({df_w %>% dplyr::select(State,IA_2007_Home,IA_2007_Outside)%>% ggplot() + geom_point(mapping = aes(x=State, y= IA_2007_Home)) + labs(title = "Home internet usage in 2007", x="State", y="Number of users")})
+
+renderPlot({df_w %>% dplyr::select(State,IA_2007_Home,IA_2007_Outside)%>% ggplot() + geom_point(mapping = aes(x=State, y= IA_2007_Outside)) + labs(title = "Outside internet usage in 2007", x="State", y="Number of users")})
+
+renderPlot({df_x %>% dplyr::select(State,IA_2012_Home,IA_2012_Outside)%>% ggplot() + geom_point(mapping = aes(x=State, y= IA_2012_Home)) + labs(title = "Home internet usage in 2012", x="State", y="Number of users")})
+
+renderPlot({df_x %>% dplyr::select(State,IA_2012_Home,IA_2012_Outside)%>% ggplot() + geom_point(mapping = aes(x=State, y= IA_2012_Outside)) + labs(title = "Outside internet usage in 2012", x="State", y="Number of users")})
+
+```
+
+**   **
+## **Facebook users vs mode of Internet usage in 2007**
+
+**Inputting the CSV into R**
+
+I wanted to compare the number of Facebook users of each state to each state's mode of internet usage. I created two querys, one that pulled the 2007 percents for people who had access to internet at home and outside of home by state and one that pulled the number of facebook users for each state.
+
+
+```{r}
+
+df_u <- data.world::query(data.world::qry_sql
+("SELECT `2007Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS IA_2007_Home,
+`2007Internet_Cleaned`.percent_of_individuals_who_access_internet_outside_of_household AS IA_2007_Outside,
+`2007Internet_Cleaned`.region as State 
+FROM 2007Internet_Cleaned"), dataset=project)
+
+
+df_t <- data.world::query(data.world::qry_sql
+("SELECT facebook_cleaned.faceook_users as users, region as State
+from facebook_cleaned"), dataset=project)
+
+
+
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+I created a line graph that showed the spread of the data by using the dplyr mutate function with cummean. This showed how varied many states were and how each changed the mean of the data set. The final value was the overall mean and that was used to compare to the rest of the charts. I noticed that California with the highest population of Facebook users, was actually below average in both percent of people who used internet at home and outside of home. This is very intriguing because one would think that the place with the most Facebook users would also have a higher level of people using internet from home or from outside of the home; however, that trend is not seen. This may be due to increase of technological advances in other states and California keeping all of its advance in the bay area. Users in other states are more likely to use internet from home than those in California because of the fast-paced life there.
+
+```{r}
+
+renderPlot({df_t %>% dplyr::filter(State != 'United States')%>% dplyr::mutate(avg_users = cummean(users)) %>% ggplot(mapping = aes(x=State, y=avg_users, group = 1)) + geom_point() + geom_line() + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_t %>% dplyr::filter(State != 'United States')%>% dplyr::mutate(avg_users = cummean(users)) %>% ggplot(mapping = aes(x=State, y=users, fill = avg_users)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_u %>% dplyr::filter(State != 'United States')%>% ggplot(mapping = aes(x=State, y=IA_2007_Home, fill = IA_2007_Home)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_u %>% dplyr::filter(State != 'United States')%>% ggplot(mapping = aes(x=State, y=IA_2007_Outside, fill = IA_2007_Outside )) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+
+```
+**   **
+## **Facebook users vs mode of Internet usage in 2012**
+
+**Inputting the CSV into R**
+
+I wanted to anayse the previous insight further by looking at more recent data, so I made a similar query but for 2012 numbers for people who had access to internat at home vs out of the home.
+
+
+```{r}
+
+df_v <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS IA_2012_Home,
+`2012Internet_Cleaned`.percent_of_individuals_who_access_internet_outside_of_household AS IA_2012_Outside,
+`2012Internet_Cleaned`.region as State
+FROM 2012Internet_Cleaned"), dataset=project)
+
+
+
+```
+
+**Reformatting in R**
+
+Gathering is not necessary for this insight.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+Further analyzing from a previous insight, I decided to look at 2012 as well to see if there was a relationship there. Since the Facebok data was the same, I used the previous graph and previous average. I created two more graphs that shows the percent of people who use internet outside of the home and percent of people who use the internet at home. It seems as though the California and New York, states with the highest number of Facebook users, actually were below average, even lower than 2007. This is very surprising because it would seem that as time goes on, more and more people would be able to use internet straight from their home. However, since people often work from the office, it makes sense why the percent for usage at home is so low, especially in the cities with a higher industrial tech-savvy base.
+
+```{r}
+
+renderPlot({df_v %>% dplyr::filter(State != 'United States')%>% ggplot(mapping = aes(x=State, y=IA_2012_Home, fill = IA_2012_Home)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_v %>% dplyr::filter(State != 'United States')%>% ggplot(mapping = aes(x=State, y=IA_2012_Outside, fill = IA_2012_Outside )) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+
+```
+**   **
+## **Internet Access Vs Average Income Respective to 2007 and 2012**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from four different data sources: 2007 internet access, 2012 internet access, 2007 income, and 2012 income. The code for this is shown in the screenshot below.
+
+```{r}
+df_a <- data.world::query(data.world::qry_sql
+("SELECT `2007Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS 2007IAHome, 
+`2007Internet_Cleaned`.region as State, 
+`2007income_cleaned`.average_household_income as AVG_Income2007
+FROM 2007Internet_Cleaned 
+JOIN `2007income_cleaned` ON `2007Internet_Cleaned`.region  = `2007income_cleaned`.region"), dataset=project)
+
+
+df_b <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS 2012IAHome, 
+`2012Internet_Cleaned`.region as State, 
+`2012income_cleaned`.average_household_income as AVG_Income2012
+FROM 2012Internet_Cleaned 
+JOIN `2012income_cleaned` ON `2012Internet_Cleaned`.region  = `2012income_cleaned`.region"), dataset=project)
+
+
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+The two scatterplots compares internet access to average income with respect to State as well for both years 2007 and 2012. At first glance, we see that there is a strong, positive, linear correlation between internet access and average income.  As seen in the data below, the States with "high" national average income have the highest percentage of internet access and the States with "low" national average income have the lowest percentage of internet access. This is expected as States with weathier inhabitants can more likely afford internet services, thus the higher internet penetration and vise versa. However, it is interesting to see that the correlation between internet access and average income is significantly weaker in the year of 2012 and more scattered. Furthermore, the slope of average income versus internet access is a lot less steep indicating States with lower average income increasingly high percentages of internet access relative to the 2007 distribution. Thus one can conclude that within the 5 year time frame, the affordability of internet access is on the rise. This can be projected long term as when as technology advancements increase overtime, cause the price of past technologies to decrease. 
+
+
+```{r}
+renderPlot({df_a %>% ggplot(mapping = aes(x=`2007IAHome`, y=`AVG_Income2007`, color=State)) + geom_point()+ labs(title = "2007 Internet Acess vs Average Income", x="Internet Access", y="Average Income")})
+
+renderPlot({df_b %>% ggplot(mapping = aes(x=`2012IAHome`, y=`AVG_Income2012`, color=State)) + geom_point()+ labs(title = "2012 Internet Access vs Average Income", x="Internet Access", y="Average Income")})
+```
+
+To further analyze State average income's direct effect on internet and Facebook penetration I create two parameters, Low Income and High Income based on the above visualization. With these parameters, I utilize the Calculated Field to create a custom dimension, "Level of National Average Income." Utilizing this dimension in tandem with Regions, I created a crosstabs to compare income with Internet penetration. As seen in the data below, the States with "high" national average income have the highest internet penetration and the States with "low" national average income have the lowest internet penetration. Thus one can conclude that there is a strong, linear, positive correlation between income and internet penetration. This is expected as States with weathier inhabitants can afford to internet services, thus the higher internet penetration and vise versa.
+
+Similarly, we analyze the each State's average income's effect on Facebook penetration using the same parameters and calculated fields aforementioned. We see the pattern is the same. States with "low" national average income have the lowest Facebook penetration, whereas States with "high" national average income have the high Facebook penetration. This exemplifies a strong, linear, positive correlation between income and Facebook penetration as well. This validates the conclusion drawn above as poorer inhabitants are less likely to be able to afford internet services, lowering the internet penetration and in return lowering Facebook penetration because one cannot access Facebook without internet access.
+
+**   **
+## **Internet Penetration Vs Facebook Penetration Vs Internet Access**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from three different data sources: internet penetration, Facebook penetration, and internet access percentage. The code for this is shown in the screenshot below.
+
+```{r}
+df_aa <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS InternetAccess2, 
+`2012Internet_Cleaned`.region as State,
+facebook_cleaned.facebook_penetration as FB_Pen2
+FROM 2012Internet_Cleaned 
+JOIN facebook_cleaned ON `2012Internet_Cleaned`.region = facebook_cleaned.region"), dataset=project)
+
+df_c <- data.world::query(data.world::qry_sql
+("SELECT facebook_cleaned.internet_penetration as NET_Pen, 
+facebook_cleaned.facebook_penetration as FB_pen,
+facebook_cleaned.region as State
+FROM Facebook_Cleaned"), dataset=project)
+
+df_d <- data.world::query(data.world::qry_sql
+("SELECT `2012internet_cleaned`.percent_of_individuals_who_access_internet_from_home as IAhome,
+`2012internet_cleaned`.percent_of_individuals_who_access_internet_outside_of_household as IAoutside,
+`2012internet_cleaned`.region as State
+FROM 2012internet_cleaned"), dataset=project)
+
+df_e <- data.world::query(data.world::qry_sql
+("SELECT `2012Internet_Cleaned`.percent_of_individuals_who_access_internet_from_home AS InternetAccess, 
+`2012Internet_Cleaned`.region as State,
+facebook_cleaned.internet_penetration as NET_Pen2
+FROM 2012Internet_Cleaned 
+JOIN facebook_cleaned ON `2012Internet_Cleaned`.region = facebook_cleaned.region"), dataset=project)
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+First I compare the percent tiles of individuals who has access to internet of inside of household to the percentage of individuals who have access to internet outside of household. As expected, I can see that there is a extremely strong, positive, linear correlation between the two variables. One can assume that people with access to internet from home should have access to internet outside of home as well. Furthermore, one can assume these two variables can be used interchangeably now. 
+
+```{r}
+renderPlot({df_d %>%
+  ggplot() + 
+    geom_histogram(mapping = aes(x=`IAhome`, fill = State), bins = 10) + 
+    labs(title = "Percent of the Populace with Internet Access From Home Respective to State", x="Percent of Internet Access From Home", y="Count")})
+
+renderPlot({df_d %>%
+  ggplot() + 
+    geom_histogram(mapping = aes(x=`IAoutside`, fill = State), bins = 10) + 
+    labs(title = "Percent of the Populace with Internet Access From Outside of Home Respective to State", x="Percent of Internet Access From Home", y="Count")})
+```
+
+
+Facebook penetration is the ratio of Facebook users to population and internet penetration is measures internet users to population.Looking at the Internet versus Facebook Penetration plot, one can see that the District of Columbia is an extreme outlier for Facebook penetration. However, when it comes to Internet penetration, D.C. has a normalized value. Upon further analysis, there appears to be a positive, linear correlation between Internet penetration and Facebook penetration. This is expected, as one should expect that areas with higher internet penetration should have a higher Facebook penetration. However, interesting enough  the correlation between the two is not strong at all, perhaps fewer people use Facebook than one would typically imagine. Analyzing the Internet Penetration versus we see that there is in fact a direct positive correspondence between percentage of internet access and internet penetration. This is expected as areas with high internet access percentages, should have higher internet penetration as population is a factor in both. Seen that there is internet penetration and internet access percentages are homogeneous in nature, we can conclude that aforementioned analysis on internet access can be directly applied to internet penetration as well and vise versa.
+
+```{r}
+renderPlot({df_c %>% ggplot(mapping = aes(x=`NET_Pen`, y=`FB_pen`, color=State)) + geom_point()+ labs(title = "Internet Penetration vs Facebook Penetration", x="Internet Penetration", y="Facebook Penetration")})
+
+renderPlot({df_aa %>% ggplot(mapping = aes(x=`InternetAccess2`, y=`FB_Pen2`)) + geom_point() + geom_smooth(method = "lm", se = FALSE) + labs(title = "Internet Penetration vs Internet Access", x="Internet Access", y="Internet Penetration")})
+
+renderPlot({df_e %>% ggplot(mapping = aes(x=`InternetAccess`, y=`NET_Pen2`)) + geom_point() + geom_smooth() + labs(title = "Internet Penetration vs Internet Access", x="Internet Access", y="Internet Penetration")})
+```
+
+**   **
+## **Gender Vs Facebook Penetration**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from two different data sources: population (male, female and total) and Facebook penetration. The code for this is shown in the screenshot below.
+
+```{r}
+df_f <- data.world::query(data.world::qry_sql
+("SELECT `2012population_cleaned`.female_total_population as female_pop,
+`2012population_cleaned`.total_population as total_pop,
+facebook_cleaned.facebook_penetration as FB_Pen2,
+`2012population_cleaned`.region as State
+FROM 2012population_cleaned 
+JOIN facebook_cleaned ON `2012population_cleaned`.region = facebook_cleaned.region"), dataset=project)
+
+df_g <- data.world::query(data.world::qry_sql
+("SELECT `2012population_cleaned`.male_total_population as male_pop,
+`2012population_cleaned`.total_population as total_pop,
+facebook_cleaned.facebook_penetration as FB_Pen2,
+`2012population_cleaned`.region as State
+FROM 2012population_cleaned 
+JOIN facebook_cleaned ON `2012population_cleaned`.region = facebook_cleaned.region"), dataset=project)
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+Interesting enough, regarding Facebook Penetration, we see that the Delaware ranked the lowest. If wealth and population size are contributing factors to Facebook Penetration, it is odd to see Delaware ranked the lowest. Only 12% of Delaware's population is below the poverty level, whereas 16% of the national population is below the poverty level. The population size of Delaware is 900,000 portraying that Delaware is both economically well off and smaller in population compared to other States. However, one would expect such a State to have higher Facebook penetration.
+
+Given that the District of Columbia is an extreme outlier, I extrapolate it. Then I take into consideration, gender by creating calculated fields, which I implement by utilizing mutate as seen below, to denote the percentage of gender type respective to each State. First I create two line plots, to visualize the gender discrepency relative to each State. As seen below, the variance is significant enough to proceed with analysis. Analyzing further by implementing bargraphs that incorporate gender as a fill. This allows us to differentiate Facebook penetration relative to gender type. Looking at the distribution, I see that the top 5 States ranked highest in Facebook penetration are D.C., Georgia, Illinois, Rhode Island and Washington. Interesting enough, all five of those States have a greater female population as seen in the plots below. One may conclude that gender has a direct effect on Facebook penetration.
+
+```{r}
+renderPlot({df_f %>% dplyr::filter(State != 'District of Columbia')%>% dplyr::mutate(percentFemale = ((`female_pop`)/(`total_pop`))*100) %>% ggplot(mapping = aes(x=State, y=percentFemale, group = 1)) + geom_point() + geom_line() + labs(title = "Female Population Percentage Distribution")+ theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_f %>% dplyr::filter(State != 'District of Columbia')%>% dplyr::mutate(percentFemale = ((`female_pop`)/(`total_pop`))*100) %>% ggplot() + geom_bar(aes(State, `FB_Pen2`, fill = percentFemale), position = "dodge", stat="identity") + labs(title = "Facebook Penetration with Respect to Percentage of Female Population", y="Facebook Penetration") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_g %>% dplyr::filter(State != 'District of Columbia')%>% dplyr::mutate(percentMale = ((`male_pop`)/(`total_pop`))*100) %>% ggplot(mapping = aes(x=State, y=percentMale, group = 1)) + geom_point() + geom_line() + labs(title = "Male Population Percentage Spread") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+renderPlot({df_g %>% dplyr::filter(State != 'District of Columbia')%>% dplyr::mutate(percentMale = ((`male_pop`)/(`total_pop`))*100) %>% ggplot() + geom_bar(aes(State, `FB_Pen2`, fill = percentMale), position = "dodge", stat="identity") + labs(title = "Facebook Penetration with Respect to Percentage of Male Population", y="Facebook Penetration") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+```
+
+**   **
+## **Younger Age Group (15-29) Vs Facebook Penetration**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from two different data sources: Age groups of population and Facebook penetration. The code for this is shown in the screenshot below.
+
+```{r}
+df_h <- data.world::query(data.world::qry_sql
+("SELECT `2012population_cleaned`.total_estimate_age_15_to_19_years as age15_19,
+`2012population_cleaned`.total_estimate_age_20_to_24_years as age20_24,
+`2012population_cleaned`.total_estimate_age_25_to_29_years as age25_29,
+`2012population_cleaned`.total_population as totalPop,
+facebook_cleaned.facebook_penetration as FB_PEN,
+`2012population_cleaned`.region as State
+FROM 2012population_cleaned
+JOIN facebook_cleaned ON `2012population_cleaned`.region = facebook_cleaned.region"), dataset=project)
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+One of the stereotypes in society is that younger people (teenagers and young adults) are more tech savvy and are a vast majority of the social media scene. In this insight I am deciding to test if the stereotype holds any truth. Specifically, I analyzed Facebook penetration and age group 15-29. I created a calculated field, by implementing R's mutate function, to configure the percentage the younger custom age group that I created, respective to the total population to each respective State. As seen previously, D.C. was an immense outlier and had the highest Facebook penetration respective to other States. Based on the plot below, I can conclude that D.C. has the most amount of individuals within the age group 15-29 respective to population since it had the highest "Young Age Group," percentage compared to other states, thus exemplifying said stereotype.
+
+```{r}
+renderPlot({df_h %>% dplyr::filter(State != 'United States')%>% dplyr::mutate(younger = ((`age15_19` + `age20_24` + `age25_29`)/(`totalPop`))*100) %>% ggplot() + geom_bar(aes(State, younger), position = "dodge", stat="identity") + labs(title = "Population Percentage of Custom Age Group (15-29) by State", y="Percentage of Age Group 15-29") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+```
+
+Examining the younger age group, we see that the top 5 States with the highest percentage of ages 15-29, are D.C., Wyoming, North Dakota, Vermont, and Alaska. Interesting enough we see that among the set of states, only DC is apart of the top 5 Facebook penetration States.
+
+```{r}
+renderPlot({df_h %>% dplyr:: filter(State %in% c("Alaska", "District of Columbia", "North Dakota", "Vermont", "Wyoming"))%>% dplyr::mutate(younger = ((`age15_19` + `age20_24` + `age25_29`)/(`totalPop`))*100) %>% ggplot() + geom_bar(aes(State, younger, fill = "#FF6666"), position = "dodge", stat="identity") + labs(title = "The Five Highest Population Percentage of Age Group (15-29)", y="Percentage of Age Group 15-29") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+```
+
+We analyzing further by incorporating Facebook penetration directly into our data analysis. Given that the District of Columbia is an extreme outlier, we extrapolate it and further analyze Facebook penetration with respect to the younger age group of 15-29. Based on the screenshot below, we now realize that although only DC was apart of the top 5 Facebook penetration States, the top 4 States with the highest percentage of ages 15-29 have high Facebook penetration as well, just not the highest. Thus one can conclude that age is a factor when it comes to the social media scene, just not as overwhelming as it is portrayed in society.
+
+```{r}
+renderPlot({df_h %>% dplyr:: filter(State != "District of Columbia") %>% dplyr::mutate(younger = ((`age15_19` + `age20_24` + `age25_29`)/(`totalPop`))*100) %>% ggplot() + geom_bar(aes(State, younger, fill = `FB_PEN`), position = "dodge", stat="identity") + labs(title = "Facebook Penetration with Respect to Population Percentage of Custom Age Group (15-29)", y="Percentage of Age Group 15-29") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+```
+
+Investigating further, it is extremely odd, and interesting to see that Georgia, Illinois, and Washington (part of the Top 5 Facebook penetration States), had extremely low percentages of ages 15-29 respective to each State's population. Similarly, it is odd to see that Delaware, the State with the lowest, Facebook penetration, as mentioned previously, has a pretty high percentage of age 15-29 individuals. Both of these aforementioned details are counter intuitive to what the data has shown up until now. This could mean that there are bigger variables at play effecting Facebook penetration or these are merely exceptions or age is not as big of a factor as imagined.
+
+```{r}
+renderPlot({df_h %>% dplyr:: filter(State %in% c("Delaware", "Georgia", "Illinois", "Washington")) %>% dplyr::mutate(younger = ((`age15_19` + `age20_24` + `age25_29`)/(`totalPop`))*100) %>% ggplot() + geom_bar(aes(State, younger, fill = `FB_PEN`), position = "dodge", stat="identity") + labs(title = "Facebook Penetration with Respect to Population Percentage of Custom Age Group (15-29)", y="Percentage of Age Group 15-29") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+```
+**   **
+## **Elderly Age Group (60-85+) Vs Facebook Penetration**
+
+**Inputting the CSV into R**
+
+In this step, I used the data.world non-select * SQL to create two tibbles containing columns from two different data sources: Age groups of population and Facebook penetration. The code for this is shown in the screenshot below.
+
+```{r}
+df_i <- data.world::query(data.world::qry_sql
+("SELECT `2012population_cleaned`.total_estimate_age_60_to_64_years as age60_64,
+`2012population_cleaned`.total_estimate_age_65_to_69_years as age65_69,
+`2012population_cleaned`.total_estimate_age_70_to_74_years as age70_74,
+`2012population_cleaned`.total_population as totalPOP,
+facebook_cleaned.facebook_penetration as FB_pen,
+`2012population_cleaned`.region as State
+FROM 2012population_cleaned
+JOIN facebook_cleaned ON `2012population_cleaned`.region = facebook_cleaned.region
+"), dataset=project)
+```
+
+**Reformatting in R**
+
+The next step in the data science pipeline is to gather the columns into a set of key value pairs. However, for this current insight, gathering was not needed.
+
+**Utilizing dplyr to transform, visualize, and communicate**
+
+Having analyzed and somewhat validated that the majority of social media users are among the younger age groups, I analyze the elder age group to check if it matches the outcome and to test the alternative stereotype that elderly make up the vast minority of social media users. I create a calculated field, by implementing R's mutate function to that calculates the percentage of elders 60-85+ years of age respective to population per State. At initial glance, I see that D.C. is not among the top 3 States with the largest percentage of ages 60-85+ individuals, this is expected as the State with the highest Facebook penetration should have more younger population if the stereotypes are true.
+
+```{r}
+renderPlot({df_i %>% dplyr::filter(State != 'District of Columbia')%>% dplyr::mutate(elder = ((`age60_64` + `age65_69` + `age70_74`)/(`totalPOP`))*100) %>% ggplot() + geom_bar(aes(State, elder, fill = `FB_pen`), position = "dodge", stat="identity") + labs(title = "Facebook Penetration with Respect to Population Percentage of Custom Age Group (60-85+) by State", y="Percentage of Age Group 60-85+") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+```
+
+After extrapolating the outlier DC, I implement a tree map to gain more perspective. I that the six States with the highest percentage 60-85+ population (ranked by size), are Vermont, Wyoming, North Dakota, South Dakota, Delaware, and Montana. Of the six States, four of which have lower Facebook penetration, with Wyoming and North Dakota being exceptions. Most importantly, we see that Delaware, the State with the absolute lowest Facebook penetration is among the States with the highest percentage of elderly population (60-85+ years of age), thus validating our previous outcome on the younger age group. Taking a look at the distributed pattern of Facebook penetration relative to the elderly age tree map, we see that the vast majority of high Facebook penetration are among the smaller sized tiles indicating, States with much lower percentages of elderly population have higher Facebook penetration, thus exemplifying the stereotype as well. Consequently, one can conclude, that age does play a significant factor in Facebook penetration, social media usage. However, we again see some oddities in our data. We see that Wyoming and North Dakota have pretty high Facebook penetration, but are part of the States with the largest elderly population, thus signifying that there are other variables at play as well.
+
+```{r}
+renderPlot({
+ ggplot2::ggplot(data=df_i %>% dplyr::mutate(elder = ((`age60_64` + `age65_69` + `age70_74`)/(`totalPOP`))*100) %>% arrange(elder) %>% dplyr::filter(State != 'District of Columbia'), mapping = aes(area = elder, fill = FB_pen, label=State)) +
+ geom_treemap() +
+ geom_treemap_text(fontface = "italic", colour = "white", place = "topleft")+ labs(title = "Tree Map of Population of Elder Age Group (60-85+) Relative to Facebook Penetration (fill = Facebook Penetration, area = Population Percentage of Age Group 60-85+")
+})
+
+renderPlot({df_i %>% dplyr:: filter(State %in% c("Vermont", "South Dakota", "North Dakota", "Delaware", "Wyoming", "Montana"))%>% dplyr::mutate(elder = ((`age60_64` + `age65_69` + `age70_74`)/(`totalPOP`))*100) %>% ggplot() + geom_bar(aes(State, elder, fill = `FB_pen`), position = "dodge", stat="identity") + labs(title = "The Six Lowest Population Percentage of Age Group (60-85+)", y="Percentage of Age Group 60-85+") + theme(axis.text.x = element_text(angle = 90, hjust = 1))})
+
+```
+
+# **Appendix**
+
+1)	Aes – found in every insight
+2)	Arrange – 
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+        Correlation Between Average Household Income and Internet Penetration
+    B)	Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship Between Facebook Penetration, Internet Penetration, and 20-24 Population – 2012
+        Relationship between In-home and Out of Home Internet Access for 2007/2012
+        Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets
+    C)  Elderly Age Group (60-85+) Vs Facebook Penetration
+3)	Bar Chart
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+        Difference in Income by State for 2007-2012
+        Facebook Penetration for 15-19 Year Olds Versus 40-44 Year Olds
+        Percent of Individuals Who Accessed the Internet from Home in 2007 and 2012
+    B)	Relationship Between Millennial Population and Internet Access
+        Relationship Between Millennial Population and Internet Access
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage – 2007
+    C)	Trends in percent changes between 2007 and 2012 by state of household income and home internet usage
+        Facebook users vs mode of Internet usage in 2007
+        Facebook users vs mode of Internet usage in 2012
+    D ) Gender Vs Facebook Penetration
+        Younger Age Group (15-29) Vs Facebook Penetration
+        Elderly Age Group (60-85+) Vs Facebook Penetration
+4)	Blending Data
+    A)	Correlation Between Average Household Income and Internet Penetration
+    B)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+5)	Box Plot
+    A)	Difference in Income by State for 2007-2012
+    B)	Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+6)	Calculated fields
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD)
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship between In-home and Out of Home Internet Access for 2007/2012
+        Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets
+    C) Internet Access Vs Average Income Respective to 2007 and 2012
+       Gender Vs Facebook Penetration
+       Younger Age Group (15-29) Vs Facebook Penetration
+       Elderly Age Group (60-85+) Vs Facebook Penetration
+7)	Case
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets
+8)	Cleaning data
+    A)	Inputting and Cleaning the CSVs
+9)	Crosstab
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+10)	Dashboard
+    A)	Internet Usage at Home and its Correlation with the 65-69 Year Old Population
+    B)	Relationship Between Millennial Population and Internet Access
+11)	Data Model
+    A)	Building the Data Model
+12)	Facet wrap
+    A)	Difference in Income by State for 2007-2012
+    B)	Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets
+        Relationship Between Facebook Penetration and Household Internet Usage - 2007
+13)	Filter
+    A)	Difference in Income by State for 2007-2012
+        Facebook Penetration for 15-19 Year Olds Versus 40-44 Year Olds
+        Percent of Individuals Who Accessed the Internet from Home in 2007 and 2012
+        Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+        Facebook Penetration and its Relationship to Average Household Income
+    B)	Relationship Between Millennial Population and Internet Access
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship between In-home and Out of Home Internet Access for 2007/2012
+    C)	Facebook users vs mode of Internet usage in 2007
+        Facebook users vs mode of Internet usage in 2012
+    D)  Gender Vs Facebook Penetration
+        Younger Age Group (15-29) Vs Facebook Penetration
+        Elderly Age Group (60-85+) Vs Facebook Penetration
+14)	Gather
+    A)	Percent of Individuals Who Accessed the Internet from Home in 2007 and 2012
+        Difference in Income by State for 2007-2012
+    B)  Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship between In-home and Out of Home Internet Access for 2007/2012
+15)	Geom – found in every insight
+16)	Group By (SQL)
+    A)	Relationship between In-home and Out of Home Internet Access for 2007/2012
+17)	Group_By (dplyr)
+    A)	Difference in Income by State for 2007-2012
+    B)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+18)	Histogram
+    A)	Facebook Penetration and its Relationship to Average Household Income
+    B)  Internet Penetration Vs Facebook Penetration Vs Internet Access
+19)	Join (SQL)
+    A)	Full
+        a)	Difference in Income by State for 2007-2012
+    B)	Left
+        a)	Percent of Individuals Who Accessed The Internet from Home in 2007 and 2012
+        b)	Relationship Between Facebook Penetration and Household Internet Usage - 2007
+    C)	Right
+        a)	Relationship between In-home and Out of Home Internet Access for 2007/2012
+20)	Joining Tables – found in every insight
+21)	Joining to Census data – found in every insight
+22)	Level of Detail Calculations
+    A)	Difference in Income by State for 2007-2012
+    B)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD)
+23)	Maps (Choropleth)
+    A)	Difference in Income by State for 2007-2012
+        Internet Usage at Home and its Correlation with the 65-69-Year-Old Population
+    B)	Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+b)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+24)	Mutate
+    A)	Cumulative Distribution
+        a)	Relationship Between Facebook Penetration and Household Internet Usage - 2007
+    B)	Cumulative Mean
+        a)	Facebook users vs mode of Internet usage in 2007
+    C)	Cumulative Sum
+        a)	Relationship Between Facebook Penetration and Household Internet Usage - 2007
+    D)	If Else
+        a)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+        b)	Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+    E)	Lead/Lag
+        a)	Difference in Income by State for 2007-2012
+    F)	Percent Rank
+        a)	Correlation Between Average Household Income and Internet Penetration
+    G)  Other
+        a)  Gender Vs Facebook Penetration
+            Younger Age Group (15-29) Vs Facebook Penetration
+            Elderly Age Group (60-85+) Vs Facebook Penetration
+25)	Packed Bubbles
+    A)	Internet Usage at Home and its Correlation with the 65-69-Year-Old Population
+26)	Parameter
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+27)	Position
+    A)	Percent of Individuals Who Accessed the Internet from Home in 2007 and 2012
+    B)  Gender Vs Facebook Penetration
+        Younger Age Group (15-29) Vs Facebook Penetration
+        Elderly Age Group (60-85+) Vs Facebook Penetration
+28)	Read CSV
+    A)	Inputting and Cleaning the CSVs
+29)	Regular Expressions
+    A)	Inputting and Cleaning the CSVs
+    B)	Difference in Income by State for 2007-2012
+        Internet Usage at Home and its Correlation with the 65-69-Year-Old Population
+    C)	Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+30)	Scatter Plot
+    A)	Facebook Penetration and its Relationship to Average Household Income
+        Correlation Between Average Household Income and Internet Penetration
+    B)	Relationship Between Facebook Penetration and Household Internet Usage – 2007
+        Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+        Relationship between In-home and Out of Home Internet Access for 2007/2012
+        Relationship between Maximum Discrepancy of Internet Access Outside Household and Income Brackets
+    C)	Relations between internet usage at home versus internet usage outside of the home from 2007 to 2012
+        Facebook users vs mode of Internet usage in 2007
+    D)  Internet Access Vs Average Income Respective to 2007 and 2012
+        Gender Vs Facebook Penetration
+        Internet Access Vs Average Income Respective to 2007 and 2012
+        Internet Penetration Vs Facebook Penetration Vs Internet Access
+31)	Select (SQL) – found in every insight
+32)	Select (dplyr)
+    A)	Difference in Income by State for 2007-2012
+        Internet Usage at Home and its Correlation with the 65-69-Year-Old Population
+        Facebook Penetration for 15-19 Year Olds Versus 40-44 Year Olds
+    B)	Relationship Between Millennial Population and Internet Access
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship between Male to Female Ratio and Internet Penetration (Blending Data + Ifelse + LOD )
+    C)	Trends in percent changes between 2007 and 2012 by state of household income and home internet usage
+        Relations between internet usage at home versus internet usage outside of the home from 2007 to 2012
+33)	Set (Tableau)
+    A)	Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship Between Facebook Penetration and Household Internet Usage - 2007
+34)	Stat
+    A)  Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+        Difference in Income by State for 2007-2012
+        Facebook Penetration for 15-19 Year Olds Versus 40-44 Year Olds
+    B)	Relationship Between Millennial Population and Internet Access
+        Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage – 2007
+    C)  Trends in percent changes between 2007 and 2012 by state of household income and home internet usage                 Facebook users vs mode of Internet usage in 2007
+        Facebook users vs mode of Internet usage in 2012
+        Gender Vs Facebook Penetration
+        Younger Age Group (15-29) Vs Facebook Penetration
+        Elderly Age Group (60-85+) Vs Facebook Penetration
+35)	Subqueries
+    A)  Levels of Internet Usage by State and Average Income by State for the Years 2007/2012
+    B)	Relationship Between Income and Users Accessing Internet Outside Home from 2007 to 2012
+        Relationship Between Facebook Penetration and Household Internet Usage - 2007
+36)	Summarize
+    A)	Mean
+        a)	Percent of Individuals Who Accessed The Internet from Home in 2007 and 2012
+        b)	Relationship Between Millennial Population and Internet Access
+    B)	Median
+        a)	Relationship between In-home and Out of Home Internet Access for 2007/2012
+37)	Table Calculation
+    A)	Correlation Between Average Household Income and Internet Penetration
+    B)	Relationship Between Facebook Penetration and Household Internet Usage - 2007
+38)	Tibble – found in every insight
+39)	Tree Map
+    A)	Relationship Between Facebook Penetration, Internet Penetration, and 20-24 Population - 2012
+    B)  Elderly Age Group (60-85+) Vs Facebook Penetration
